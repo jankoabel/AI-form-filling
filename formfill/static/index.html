@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="sk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI vypĺňanie tlačív</title>
+<style>
+  :root {
+    --bg: #f5f5f2; --panel: #ffffff; --ink: #1c1d1f; --muted: #6b6e73; --line: #e2e1dc;
+    --accent: #1f3a93; --accent-ink: #ffffff; --user: #1f3a93; --bot: #f0efea; --ok: #1d7a46; --err: #b3261e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #151618; --panel: #1d1f22; --ink: #ececea; --muted: #9a9ca1; --line: #2e3035;
+            --accent: #7d9cff; --accent-ink: #0d1330; --user: #33447a; --bot: #26282c; --ok: #5cc98a; --err: #ff8a80; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--ink); }
+  .app { display: grid; grid-template-columns: 290px 1fr; height: 100dvh; }
+  aside { border-right: 1px solid var(--line); background: var(--panel); display: flex; flex-direction: column; min-height: 0; }
+  aside header { padding: 18px 16px 10px; }
+  h1 { font-size: 17px; margin: 0 0 2px; letter-spacing: -.01em; }
+  .sub { color: var(--muted); font-size: 12.5px; }
+  .upload { margin: 8px 16px 14px; display: block; border: 1.5px dashed var(--line); border-radius: 10px; padding: 14px;
+            text-align: center; cursor: pointer; color: var(--muted); font-size: 13.5px; transition: border-color .15s; }
+  .upload:hover, .upload.drag { border-color: var(--accent); color: var(--ink); }
+  .upload input { display: none; }
+  .sessions { overflow-y: auto; flex: 1; padding: 0 8px 12px; }
+  .sess { width: 100%; text-align: left; background: none; border: 0; color: inherit; padding: 10px 10px; border-radius: 8px; cursor: pointer; font: inherit; }
+  .sess:hover { background: var(--bg); }
+  .sess.active { background: var(--bg); box-shadow: inset 3px 0 0 var(--accent); }
+  .sess b { display: block; font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sess span { font-size: 12px; color: var(--muted); }
+  main { display: flex; flex-direction: column; min-height: 0; }
+  .top { display: flex; align-items: center; gap: 14px; padding: 14px 22px; border-bottom: 1px solid var(--line); background: var(--panel); min-height: 62px; }
+  .top .title { font-weight: 600; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bar { width: 160px; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--accent); width: 0; transition: width .3s; }
+  .count { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .btn { background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 8px; padding: 8px 14px; font: inherit; font-weight: 600; cursor: pointer; text-decoration: none; font-size: 14px; }
+  .btn[hidden] { display: none; }
+  .log { flex: 1; overflow-y: auto; padding: 24px 22px; display: flex; flex-direction: column; gap: 12px; }
+  .msg { max-width: min(680px, 88%); padding: 11px 15px; border-radius: 14px; white-space: pre-wrap; word-wrap: break-word; }
+  .msg.assistant { background: var(--bot); align-self: flex-start; border-bottom-left-radius: 4px; }
+  .msg.user { background: var(--user); color: #fff; align-self: flex-end; border-bottom-right-radius: 4px; }
+  .msg ul { margin: 4px 0; padding-left: 20px; white-space: normal; }
+  .msg p { margin: 0; }
+  .typing { color: var(--muted); font-style: italic; align-self: flex-start; font-size: 13.5px; }
+  .empty { margin: auto; text-align: center; color: var(--muted); max-width: 380px; }
+  .empty h2 { color: var(--ink); font-size: 20px; margin-bottom: 6px; }
+  form.send { display: flex; gap: 10px; padding: 14px 22px 18px; border-top: 1px solid var(--line); background: var(--panel); }
+  textarea { flex: 1; resize: none; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font: inherit; background: var(--bg); color: var(--ink); min-height: 44px; max-height: 160px; }
+  textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--err); color: #fff; padding: 10px 16px; border-radius: 8px; font-size: 14px; }
+  @media (max-width: 760px) {
+    .app { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+    aside { border-right: 0; border-bottom: 1px solid var(--line); max-height: 36dvh; }
+    .bar { width: 70px; }
+    .log, .top, form.send { padding-left: 16px; padding-right: 16px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <header>
+      <h1>AI vypĺňanie tlačív</h1>
+      <div class="sub">Nahrajte .docx tlačivo, asistent sa opýta na údaje a vráti PDF.</div>
+    </header>
+    <label class="upload" id="drop">
+      <input type="file" id="file" accept=".docx">
+      <strong>Nahrať tlačivo</strong><br>kliknite alebo sem pretiahnite .docx
+    </label>
+    <div class="sessions" id="sessions"></div>
+  </aside>
+  <main>
+    <div class="top">
+      <div class="title" id="title">Žiadna konverzácia</div>
+      <div class="bar" title="Postup"><i id="bar"></i></div>
+      <div class="count" id="count"></div>
+      <a class="btn" id="pdf" hidden download>Stiahnuť PDF</a>
+    </div>
+    <div class="log" id="log">
+      <div class="empty"><h2>Začnite nahraním tlačiva</h2>Konverzácie sa ukladajú do databázy – môžete kedykoľvek pokračovať, aj po reštarte aplikácie.</div>
+    </div>
+    <form class="send" id="send">
+      <textarea id="input" rows="1" placeholder="Napíšte odpoveď… (Enter odošle, Shift+Enter nový riadok)" disabled></textarea>
+      <button class="btn" id="go" disabled>Odoslať</button>
+    </form>
+  </main>
+</div>
+<script>
+const $ = (id) => document.getElementById(id);
+let current = null;
+
+function esc(s) { return s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function md(text) {
+  // Minimal markdown: **bold**, bullet lists, paragraphs.
+  const blocks = esc(text).split(/\n{2,}/).map(block => {
+    const lines = block.split('\n');
+    if (lines.every(l => /^\s*[-•] /.test(l) || !l.trim()))
+      return '<ul>' + lines.filter(l => l.trim()).map(l => '<li>' + l.replace(/^\s*[-•] /, '') + '</li>').join('') + '</ul>';
+    const out = []; let list = [];
+    for (const l of lines) {
+      if (/^\s*[-•] /.test(l)) { list.push('<li>' + l.replace(/^\s*[-•] /, '') + '</li>'); continue; }
+      if (list.length) { out.push('<ul>' + list.join('') + '</ul>'); list = []; }
+      out.push(l);
+    }
+    if (list.length) out.push('<ul>' + list.join('') + '</ul>');
+    return '<p>' + out.join('\n') + '</p>';
+  });
+  return blocks.join('\n').replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+}
+function toast(msg) { const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.append(t); setTimeout(() => t.remove(), 4000); }
+async function api(path, opts = {}) {
+  const r = await fetch(path, opts);
+  if (!r.ok) { let d; try { d = (await r.json()).detail; } catch { d = r.statusText; } throw new Error(typeof d === 'string' ? d : JSON.stringify(d)); }
+  return r.status === 204 ? null : r.json();
+}
+function addMsg(role, text) {
+  const el = document.createElement('div'); el.className = 'msg ' + role;
+  el.innerHTML = role === 'assistant' ? md(text) : esc(text);
+  $('log').append(el); $('log').scrollTop = $('log').scrollHeight;
+}
+function setSession(s) {
+  current = s.id;
+  $('title').textContent = s.title;
+  const p = s.progress; $('bar').style.width = (p.total ? 100 * p.answered / p.total : 0) + '%';
+  $('count').textContent = `${p.answered}/${p.total}`;
+  $('pdf').hidden = !s.pdf_ready; $('pdf').href = `/api/sessions/${s.id}/pdf`;
+  $('input').disabled = $('go').disabled = false;
+  document.querySelectorAll('.sess').forEach(b => b.classList.toggle('active', b.dataset.id === s.id));
+}
+const PHASE = { collecting: 'zbieram údaje', review: 'kontrola', done: 'hotovo' };
+async function loadSessions() {
+  const list = await api('/api/sessions');
+  $('sessions').innerHTML = '';
+  for (const s of list) {
+    const b = document.createElement('button'); b.className = 'sess'; b.dataset.id = s.id;
+    b.innerHTML = `<b>${esc(s.title)}</b><span>${PHASE[s.phase] || s.phase} · ${s.progress.answered}/${s.progress.total} · ${new Date(s.updated_at).toLocaleString('sk-SK')}</span>`;
+    b.onclick = () => openSession(s.id);
+    if (s.id === current) b.classList.add('active');
+    $('sessions').append(b);
+  }
+}
+async function openSession(id) {
+  const s = await api(`/api/sessions/${id}`);
+  $('log').innerHTML = '';
+  s.messages.forEach(m => addMsg(m.role, m.content));
+  setSession(s); history.replaceState(null, '', '#' + id); $('input').focus();
+}
+async function upload(file) {
+  if (!file) return;
+  const fd = new FormData(); fd.append('file', file);
+  $('log').innerHTML = '<div class="typing">Analyzujem tlačivo…</div>';
+  try {
+    const data = await api('/api/sessions', { method: 'POST', body: fd });
+    $('log').innerHTML = ''; addMsg('assistant', data.reply); setSession(data.session);
+    history.replaceState(null, '', '#' + data.session.id); loadSessions(); $('input').focus();
+  } catch (e) { $('log').innerHTML = ''; toast(e.message); }
+}
+$('file').onchange = e => upload(e.target.files[0]);
+const drop = $('drop');
+['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('drag'); }));
+['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('drag'); }));
+drop.addEventListener('drop', e => upload(e.dataTransfer.files[0]));
+
+$('send').onsubmit = async e => {
+  e.preventDefault();
+  const text = $('input').value.trim(); if (!text || !current) return;
+  $('input').value = ''; addMsg('user', text);
+  const typing = document.createElement('div'); typing.className = 'typing'; typing.textContent = 'Asistent píše…';
+  $('log').append(typing); $('go').disabled = true;
+  try {
+    const data = await api(`/api/sessions/${current}/messages`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: text }) });
+    typing.remove(); addMsg('assistant', data.reply); setSession(data.session); loadSessions();
+  } catch (err) { typing.remove(); toast(err.message); }
+  finally { $('go').disabled = false; $('input').focus(); }
+};
+$('input').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('send').requestSubmit(); } });
+$('input').addEventListener('input', e => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; });
+
+loadSessions().then(() => { if (location.hash.length > 1) openSession(location.hash.slice(1)).catch(() => {}); });
+</script>
+</body>
+</html>
