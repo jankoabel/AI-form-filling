@@ -1,6 +1,6 @@
 # AI vypĺňanie tlačív
 
-**Autor:** _doplňte svoje meno_
+**Autor:** Ján Abel
 
 Systém, ktorý prijme prázdne tlačivo vo formáte `.docx`, pomocou LLM pochopí, o aký dokument ide,
 kladením otázok získa od používateľa potrebné údaje, overí ich a vráti **vyplnené tlačivo v PDF**.
