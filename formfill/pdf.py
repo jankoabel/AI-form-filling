@@ -27,7 +27,10 @@ def docx_to_pdf(docx_path: str | Path, timeout: int = 180) -> Path:
         raise ConversionError("LibreOffice (soffice) is not installed.")
     docx_path = Path(docx_path).resolve()
     with tempfile.TemporaryDirectory(prefix="lo-profile-") as profile:
-        cmd = [binary, f"-env:UserInstallation=file://{profile}", "--headless",
+        # Path.as_uri() (not a hand-built "file://" string) so the profile URI is well
+        # formed on Windows too, where the path has a drive letter and backslashes.
+        profile_uri = Path(profile).as_uri()
+        cmd = [binary, f"-env:UserInstallation={profile_uri}", "--headless",
                "--convert-to", "pdf", "--outdir", str(docx_path.parent), str(docx_path)]
         try:
             proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
