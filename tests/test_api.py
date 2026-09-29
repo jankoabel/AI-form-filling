@@ -87,3 +87,15 @@ def test_delete_session(settings, form_bytes):
 def test_frontend_is_served(settings):
     with client_for(settings) as c:
         assert "AI vypĺňanie tlačív" in c.get("/").text
+
+
+def test_document_without_fields_is_rejected(settings, tmp_path):
+    import docx
+    d = docx.Document()
+    d.add_paragraph("Lorem ipsum dolor sit amet, consectetur adipiscing elit.")
+    path = tmp_path / "lorem.docx"
+    d.save(path)
+    with client_for(settings) as c:
+        r = c.post("/api/sessions", files={"file": ("lorem.docx", path.read_bytes(), DOCX)})
+        assert r.status_code == 422 and "nenašiel žiadne polia" in r.json()["detail"]
+        assert c.get("/api/sessions").json() == []

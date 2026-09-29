@@ -20,6 +20,9 @@ from .validators import ValidationError, loose, run_validator
 
 COLLECTING, REVIEW, DONE = "collecting", "review", "done"
 FOCUS_SIZE = 3
+DONE_HINT = ("Tlačivo je vyplnené. PDF stiahnete tlačidlom „Stiahnuť PDF“ vpravo hore "
+             "(v CLI príkazom `formfill download <id>`). Ak chcete ešte niečo zmeniť, napíšte "
+             "opravu, napr. „E-mail: novy@example.org“ – PDF potom vygenerujem znova.")
 
 
 @dataclass
@@ -139,6 +142,8 @@ class ConversationEngine:
                                     for k in applied if k in self.by_key)
                 parts.append(f"Upravil som:\n{changed}\n\nJe teraz všetko v poriadku? "
                              f"Napíšte „áno“ a vygenerujem PDF, alebo pošlite ďalšiu opravu.")
+            elif state.phase == DONE and not errors:
+                parts.append(DONE_HINT)
             elif not errors:
                 parts.append(result.reply or "Ak je všetko správne, napíšte „áno“ – vygenerujem "
                                              "PDF. Ak chcete niečo zmeniť, napíšte opravu, napr. "

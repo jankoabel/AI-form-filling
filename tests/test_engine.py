@@ -124,3 +124,11 @@ def test_llm_confirmation_in_review():
     chat = FakeChat({"updates": {}, "confirmed": True, "reply": "Super."})
     st = ConversationState(values={"name": "J", "email": "a@b.sk", "has_pet": "nie"}, skipped=["note"], phase=REVIEW)
     assert engine(LLMBrain(chat)).handle(st, [], "všetko sedí").ready
+
+
+def test_after_done_questions_get_download_hint_not_confusion():
+    st = ConversationState(values={"name": "J", "email": "a@b.sk", "has_pet": "nie"},
+                           skipped=["note"], phase=DONE)
+    r = engine().handle(st, [], "where is the pdf")
+    assert "Stiahnuť PDF" in r.text and "Nerozumiem" not in r.text
+    assert st.phase == DONE and not r.ready

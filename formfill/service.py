@@ -95,6 +95,10 @@ class FormService:
         else:
             form_id = None
             title, description, fields = self.brain.derive_fields(registry.outline(template))
+            if not fields:
+                template.unlink(missing_ok=True)
+                raise InvalidDocument("V dokumente som nenašiel žiadne polia na vyplnenie "
+                                      "(napr. „Meno: ____“). Nahrajte prosím tlačivo.")
 
         s = FormSession(id=session_id, filename=filename, template_path=str(template),
                         form_id=form_id, title=title, description=description,
@@ -137,7 +141,8 @@ class FormService:
             if reply.ready:
                 try:
                     skipped = self._render(s, engine, state)
-                    reply_text += "\n\n✅ Hotovo! Vyplnené tlačivo je pripravené na stiahnutie."
+                    reply_text += ("\n\n✅ Hotovo! Vyplnené tlačivo stiahnete tlačidlom „Stiahnuť PDF“ "
+                                   "vpravo hore (v CLI sa stiahne automaticky).")
                     if skipped:
                         reply_text += "\n\nNiektoré údaje sa nepodarilo umiestniť: " + "; ".join(
                             f"{k} ({why})" for k, why in skipped)
